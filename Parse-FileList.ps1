@@ -1,3 +1,43 @@
+function ConvertTo-AbsolutePath {
+    param (
+        [string]$basePath,
+        [string]$relativePath
+    )
+
+    # 基準パスの末尾にスラッシュがあれば削除
+    $basePath = $basePath.TrimEnd('/')
+
+    # 相対パスがスラッシュで始まる場合、それは既に絶対パスなので、そのまま返す
+    if ($relativePath -match '^/') {
+        return $relativePath
+    }
+
+    # パスを配列に分割
+    $baseParts = $basePath -split '/'
+    $relativeParts = $relativePath -split '/'
+
+    # 結合されたパス部分を保持する配列を初期化
+    $pathParts = $baseParts
+
+    # 相対パスの各部分を処理
+    foreach ($part in $relativeParts) {
+        if ($part -eq '..') {
+            # '..' が出現した場合、基準パスの最後の部分を削除
+            if ($pathParts.Count -gt 0) {
+                $pathParts = $pathParts[0..($pathParts.Count - 2)]
+            }
+        } elseif ($part -ne '.' -and $part -ne '') {
+            # '.' や空でない部分をパスに追加
+            $pathParts += $part
+        }
+    }
+
+    # 基準パスと解決された相対パスを結合
+    $absolutePath = $pathParts -join '/'
+
+    return $absolutePath
+}
+
 function Parse-FileList {
     param (
         [string]$inputFile,
@@ -11,8 +51,10 @@ function Parse-FileList {
     $csvData = @()
 
     # 入力ファイルを読み込み、正規表現で分割
-    Get-Content $inputFile | ForEach-Object {
-        if ($_ -match $pattern) {
+    $lines = Get-Content $inputFile
+    for ($i = 0; $i -lt $lines.Length; $i++) {
+        $line = $lines[$i]
+        if ($line -match $pattern) {
             $permissions = $matches[1]
             $links = $matches[2]
             $owner = $matches[3]
@@ -36,6 +78,13 @@ function Parse-FileList {
                 default { 'Unknown' }
             }
 
+            # シンボリックリンクのターゲットが相対パスの場合、絶対パスに変換
+            if ($target -and ($permissions[0] -eq 'l')) {
+                $basePath = Split-Path -Path $name -Parent
+                $absoluteTarget = ConvertTo-AbsolutePath -basePath $basePath -relativePath $target
+                $target = $absoluteTarget
+            }
+
             $csvData += [PSCustomObject]@{
                 Type = $type
                 Permissions = $permissions
@@ -48,6 +97,8 @@ function Parse-FileList {
                 Time_Or_Year = $time_or_year
                 Name = $name
                 Target = $target
+                Line_Number = $i + 1
+                Original_Line = $line
             }
         }
     }
