@@ -55,6 +55,7 @@ function IsExcluded {
         return $null
     }
 }
+
 function Parse-FileList {
     param (
         [string]$inputFile,
