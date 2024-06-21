@@ -45,7 +45,9 @@ function IsExcluded {
     )
 
     # yymmdd, yyyymmddの正規表現パターン
+    $datePattern = '\d{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])|\d{4}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])'
     $datePattern = '\d{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])|(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])'
+
 
     if ($name -match $datePattern) {
         return "name: $($matches[0])"
@@ -60,15 +62,17 @@ function Parse-FileList {
     param (
         [string]$inputFile,
         [string]$outputFile,
-        [string]$excludedFile
+        [string]$excludedFile,
+        [string]$errorFile
     )
 
     # 正規表現パターン（シンボリックリンク対応）
-	$pattern = '\s*\d+\s+\d+\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+\s+\d+\s+\S+)\s+(.+?)(?:\s*->\s*(.+))?$'
+    $pattern = '\s*\d+\s+\d+\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+\s+\d+\s+\S+)\s+(.+?)(?:\s*->\s*(.+))?$'
 
     # CSVファイルにデータを書き込むための配列
     $csvData = @()
     $excludedData = @()
+    $errorData = @()
 
     # 入力ファイルを読み込み、正規表現で分割
     $lines = Get-Content $inputFile
@@ -146,6 +150,11 @@ function Parse-FileList {
                     Original_Line = $line
                 }
             }
+        } else {
+            $errorData += [PSCustomObject]@{
+                Line_Number = $i + 1
+                Original_Line = $line
+            }
         }
     }
 
@@ -153,9 +162,10 @@ function Parse-FileList {
     $csvData      | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t"
     $excludedData | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t" -Append
     $excludedData | Export-Csv -Path $excludedFile -NoTypeInformation -Delimiter "`t"
+    $errorData    | Export-Csv -Path $errorFile -NoTypeInformation -Delimiter "`t"
 
-    Write-Host "Data has been successfully parsed and saved to $outputFile and $excludedFile"
+    Write-Host "Data has been successfully parsed and saved to $outputFile, $excludedFile, and $errorFile"
 }
 
 # 関数の使用例
-# Parse-LSOutput -inputFile "C:\path\to\ls_output.txt" -outputFile "C:\path\to\parsed_ls_output.tsv" -excludedFile "C:\path\to\excluded_output.tsv"
+# Parse-LSOutput -inputFile "C:\path\to\ls_output.txt" -outputFile "C:\path\to\parsed_ls_output.tsv" -excludedFile "C:\path\to\excluded_output.tsv" -errorFile "C:\path\to\error_output.tsv"
