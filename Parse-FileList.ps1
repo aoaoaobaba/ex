@@ -38,10 +38,28 @@ function ConvertTo-AbsolutePath {
     return $absolutePath
 }
 
+function IsExcluded {
+    param (
+        [string]$name,
+        [string]$target
+    )
+
+    # yymmdd, yyyymmddの正規表現パターン
+    $datePattern = '\d{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])|\d{4}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])'
+
+    if ($name -match $datePattern) {
+        return "name: $($matches[0])"
+    } elseif ($target -match $datePattern) {
+        return "target: $($matches[0])"
+    } else {
+        return $null
+    }
+}
 function Parse-FileList {
     param (
         [string]$inputFile,
-        [string]$outputFile
+        [string]$outputFile,
+        [string]$excludedFile
     )
 
     # 正規表現パターン（シンボリックリンク対応）
@@ -49,6 +67,7 @@ function Parse-FileList {
 
     # CSVファイルにデータを書き込むための配列
     $csvData = @()
+    $excludedData = @()
 
     # 入力ファイルを読み込み、正規表現で分割
     $lines = Get-Content $inputFile
@@ -78,6 +97,15 @@ function Parse-FileList {
                 default { 'Unknown' }
             }
 
+            # ディレクトリとファイル名を分ける
+            if ($type -eq 'Directory') {
+                $directory = $name
+                $fileName = ""
+            } else {
+                $directory = Split-Path -Path $name -Parent
+                $fileName = Split-Path -Path $name -Leaf
+            }
+
             # シンボリックリンクのターゲットが相対パスの場合、絶対パスに変換
             if ($target -and ($permissions[0] -eq 'l')) {
                 $basePath = Split-Path -Path $name -Parent
@@ -85,29 +113,54 @@ function Parse-FileList {
                 $target = $absoluteTarget
             }
 
-            $csvData += [PSCustomObject]@{
-                Type = $type
-                Permissions = $permissions
-                Links = $links
-                Owner = $owner
-                Group_Name = $group_name
-                Size = $size
-                Month = $month
-                Day = $day
-                Time_Or_Year = $time_or_year
-                Name = $name
-                Target = $target
-                Line_Number = $i + 1
-                Original_Line = $line
+            # 除外条件のチェック
+            $excludeReason = IsExcluded -name $name -target $target
+            if ($excludeReason) {
+                $excludedData += [PSCustomObject]@{
+                    Type = $type
+                    Permissions = $permissions
+                    Links = $links
+                    Owner = $owner
+                    Group_Name = $group_name
+                    Size = $size
+                    Month = $month
+                    Day = $day
+                    Time_Or_Year = $time_or_year
+                    Directory = $directory
+                    FileName = $fileName
+                    Target = $target
+                    Line_Number = $i + 1
+                    Original_Line = $line
+                    ExcludeReason = $excludeReason
+                }
+            } else {
+                $csvData += [PSCustomObject]@{
+                    Type = $type
+                    Permissions = $permissions
+                    Links = $links
+                    Owner = $owner
+                    Group_Name = $group_name
+                    Size = $size
+                    Month = $month
+                    Day = $day
+                    Time_Or_Year = $time_or_year
+                    Directory = $directory
+                    FileName = $fileName
+                    Target = $target
+                    Line_Number = $i + 1
+                    Original_Line = $line
+                }
             }
         }
     }
 
     # タブ区切りでファイルに書き込む
-    $csvData | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t"
+    $csvData      | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t"
+    $excludedData | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t" -Append
+    $excludedData | Export-Csv -Path $excludedFile -NoTypeInformation -Delimiter "`t"
 
-    Write-Host "Data has been successfully parsed and saved to $outputFile"
+    Write-Host "Data has been successfully parsed and saved to $outputFile and $excludedFile"
 }
 
 # 関数の使用例
-# Parse-FileList -inputFile "C:\path\to\ls_output.txt" -outputFile "C:\path\to\parsed_ls_output.tsv"
+# Parse-LSOutput -inputFile "C:\path\to\ls_output.txt" -outputFile "C:\path\to\parsed_ls_output.tsv" -excludedFile "C:\path\to\excluded_output.tsv"
