@@ -56,6 +56,15 @@ function IsExcluded {
     }
 }
 
+function Write-OutputData {
+    param (
+        [PSCustomObject]$data,
+        [string]$filePath
+    )
+
+    $data | Export-Csv -Path $filePath -NoTypeInformation -Delimiter "`t" -Append
+}
+
 function Parse-LSOutput {
     param (
         [string]$inputFile,
@@ -79,6 +88,10 @@ function Parse-LSOutput {
 
     $i = 0
     $reader = [System.IO.File]::OpenText($inputFile)
+    $outputWriter = [System.IO.StreamWriter]::new($outputFile, $true, [System.Text.Encoding]::UTF8)
+    $excludedWriter = [System.IO.StreamWriter]::new($excludedFile, $true, [System.Text.Encoding]::UTF8)
+    $errorWriter = [System.IO.StreamWriter]::new($errorFile, $true, [System.Text.Encoding]::UTF8)
+
     try {
         while ($null -ne ($line = $reader.ReadLine())) {
             if ($line -match $pattern) {
@@ -119,28 +132,8 @@ function Parse-LSOutput {
                     $target = $absoluteTarget
                 }
 
-                # 除外条件のチェック
-                $excludeReason = IsExcluded -name $name -target $target
-                if ($excludeReason) {
-                    [PSCustomObject]@{
-                        Type = $type
-                        Permissions = $permissions
-                        Links = $links
-                        Owner = $owner
-                        Group_Name = $group_name
-                        Size = $size
-                        Date = $date
-                        Directory = $directory
-                        FileName = $fileName
-                        Target = $target
-                        Line_Number = $i + 1
-                        Original_Line = $line
-                        ExcludeReason = $excludeReason
-                    } | Export-Csv -Path $excludedFile -NoTypeInformation -Delimiter "`t" -Append
-                }
-
-                # $outputFile に出力
-                [PSCustomObject]@{
+                # 出力データ作成
+                $dataObject = [PSCustomObject]@{
                     Type = $type
                     Permissions = $permissions
                     Links = $links
@@ -153,18 +146,33 @@ function Parse-LSOutput {
                     Target = $target
                     Line_Number = $i + 1
                     Original_Line = $line
-                } | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t" -Append
+                }
+
+                # 出力データを $outputFile に出力
+                $outputWriter.WriteLine($dataObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1)
+
+                # 除外データを $excludedFile に出力
+                $excludeReason = IsExcluded -name $name -target $target
+                if ($excludeReason) {
+	                # 除外理由を追加
+                    $dataObject | Add-Member -MemberType NoteProperty -Name ExcludeReason -Value $excludeReason
+                    $excludedWriter.WriteLine($dataObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1)
+                }
 
             } else {
-                [PSCustomObject]@{
+                $errorObject = [PSCustomObject]@{
                     Line_Number = $i + 1
                     Original_Line = $line
-                } | Export-Csv -Path $errorFile -NoTypeInformation -Delimiter "`t" -Append
+                }
+                $errorWriter.WriteLine($errorObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1)
             }
             $i++
         }
     } finally {
         $reader.Close()
+        $outputWriter.Close()
+        $excludedWriter.Close()
+        $errorWriter.Close()
     }
 
     Write-Host "Data has been successfully parsed and saved to $outputFile, $excludedFile, and $errorFile"
