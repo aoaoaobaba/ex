@@ -44,10 +44,8 @@ function IsExcluded {
         [string]$target
     )
 
-    # yymmdd, yyyymmddの正規表現パターン
-    $datePattern = '\d{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])|\d{4}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])'
+    # yymmdd or yyyymmdd の正規表現パターン
     $datePattern = '\d{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])|(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])'
-
 
     if ($name -match $datePattern) {
         return "name: $($matches[0])"
@@ -58,7 +56,7 @@ function IsExcluded {
     }
 }
 
-function Parse-FileList {
+function Parse-LSOutput {
     param (
         [string]$inputFile,
         [string]$outputFile,
@@ -66,60 +64,83 @@ function Parse-FileList {
         [string]$errorFile
     )
 
-    # 正規表現パターン（シンボリックリンク対応）
+    # 正規表現パターン
     $pattern = '\s*\d+\s+\d+\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+\s+\d+\s+\S+)\s+(.+?)(?:\s*->\s*(.+))?$'
 
-    # CSVファイルにデータを書き込むための配列
-    $csvData = @()
-    $excludedData = @()
-    $errorData = @()
+    # ヘッダー行の定義（大文字）
+    $csvHeader = "TYPE`tPERMISSIONS`tLINKS`tOWNER`tGROUP_NAME`tSIZE`tDATE`tDIRECTORY`tFILE_NAME`tTARGET`tLINE_NUMBER`tORIGINAL_LINE"
+    $excludedHeader = "TYPE`tPERMISSIONS`tLINKS`tOWNER`tGROUP_NAME`tSIZE`tDATE`tDIRECTORY`tFILE_NAME`tTARGET`tLINE_NUMBER`tORIGINAL_LINE`tEXCLUDE_REASON"
+    $errorHeader = "LINE_NUMBER`tORIGINAL_LINE"
 
-    # 入力ファイルを読み込み、正規表現で分割
-    $lines = Get-Content $inputFile
-    for ($i = 0; $i -lt $lines.Length; $i++) {
-        $line = $lines[$i]
-        if ($line -match $pattern) {
-            $permissions = $matches[1]
-            $links = $matches[2]
-            $owner = $matches[3]
-            $group_name = $matches[4]
-            $size = $matches[5]
-            $date = $matches[6]
-            $name = $matches[7]
-            $target = if ($matches[8]) { $matches[8] } else { "" }
+    # ヘッダー行を書き込む
+    Out-File -FilePath $outputFile -InputObject $csvHeader -Encoding UTF8
+    Out-File -FilePath $excludedFile -InputObject $excludedHeader -Encoding UTF8
+    Out-File -FilePath $errorFile -InputObject $errorHeader -Encoding UTF8
 
-            # ファイルタイプの判別
-            $type = switch ($permissions[0]) {
-                '-' { 'File' }
-                'd' { 'Directory' }
-                'l' { 'SymbolicLink' }
-                'c' { 'CharacterDevice' }
-                'b' { 'BlockDevice' }
-                'p' { 'FIFO' }
-                's' { 'Socket' }
-                default { 'Unknown' }
-            }
+    $i = 0
+    $reader = [System.IO.File]::OpenText($inputFile)
+    try {
+        while ($null -ne ($line = $reader.ReadLine())) {
+            if ($line -match $pattern) {
+                $permissions = $matches[1]
+                $links = $matches[2]
+                $owner = $matches[3]
+                $group_name = $matches[4]
+                $size = $matches[5]
+                $date = $matches[6]
+                $name = $matches[7]
+                $target = if ($matches[8]) { $matches[8] } else { "" }
 
-            # ディレクトリとファイル名を分ける
-            if ($type -eq 'Directory') {
-                $directory = $name
-                $fileName = ""
-            } else {
-                $directory = Split-Path -Path $name -Parent
-                $fileName = Split-Path -Path $name -Leaf
-            }
+                # ファイルタイプの判別
+                $type = switch ($permissions[0]) {
+                    '-' { 'File' }
+                    'd' { 'Directory' }
+                    'l' { 'Symbolic Link' }
+                    'c' { 'Character Device' }
+                    'b' { 'Block Device' }
+                    'p' { 'FIFO' }
+                    's' { 'Socket' }
+                    default { 'Unknown' }
+                }
 
-            # シンボリックリンクのターゲットが相対パスの場合、絶対パスに変換
-            if ($target -and ($permissions[0] -eq 'l')) {
-                $basePath = Split-Path -Path $name -Parent
-                $absoluteTarget = ConvertTo-AbsolutePath -basePath $basePath -relativePath $target
-                $target = $absoluteTarget
-            }
+                # ディレクトリとファイル名を分ける
+                if ($type -eq 'Directory') {
+                    $directory = $name
+                    $fileName = ""
+                } else {
+                    $directory = Split-Path -Path $name -Parent
+                    $fileName = Split-Path -Path $name -Leaf
+                }
 
-            # 除外条件のチェック
-            $excludeReason = IsExcluded -name $name -target $target
-            if ($excludeReason) {
-                $excludedData += [PSCustomObject]@{
+                # シンボリックリンクのターゲットが相対パスの場合、絶対パスに変換
+                if ($target -and ($permissions[0] -eq 'l')) {
+                    $basePath = $directory
+                    $absoluteTarget = ConvertTo-AbsolutePath -basePath $basePath -relativePath $target
+                    $target = $absoluteTarget
+                }
+
+                # 除外条件のチェック
+                $excludeReason = IsExcluded -name $name -target $target
+                if ($excludeReason) {
+                    [PSCustomObject]@{
+                        Type = $type
+                        Permissions = $permissions
+                        Links = $links
+                        Owner = $owner
+                        Group_Name = $group_name
+                        Size = $size
+                        Date = $date
+                        Directory = $directory
+                        FileName = $fileName
+                        Target = $target
+                        Line_Number = $i + 1
+                        Original_Line = $line
+                        ExcludeReason = $excludeReason
+                    } | Export-Csv -Path $excludedFile -NoTypeInformation -Delimiter "`t" -Append
+                }
+
+                # $outputFile に出力
+                [PSCustomObject]@{
                     Type = $type
                     Permissions = $permissions
                     Links = $links
@@ -132,40 +153,22 @@ function Parse-FileList {
                     Target = $target
                     Line_Number = $i + 1
                     Original_Line = $line
-                    ExcludeReason = $excludeReason
-                }
+                } | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t" -Append
+
             } else {
-                $csvData += [PSCustomObject]@{
-                    Type = $type
-                    Permissions = $permissions
-                    Links = $links
-                    Owner = $owner
-                    Group_Name = $group_name
-                    Size = $size
-                    Date = $date
-                    Directory = $directory
-                    FileName = $fileName
-                    Target = $target
+                [PSCustomObject]@{
                     Line_Number = $i + 1
                     Original_Line = $line
-                }
+                } | Export-Csv -Path $errorFile -NoTypeInformation -Delimiter "`t" -Append
             }
-        } else {
-            $errorData += [PSCustomObject]@{
-                Line_Number = $i + 1
-                Original_Line = $line
-            }
+            $i++
         }
+    } finally {
+        $reader.Close()
     }
-
-    # タブ区切りでファイルに書き込む
-    $csvData      | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t"
-    $excludedData | Export-Csv -Path $outputFile -NoTypeInformation -Delimiter "`t" -Append
-    $excludedData | Export-Csv -Path $excludedFile -NoTypeInformation -Delimiter "`t"
-    $errorData    | Export-Csv -Path $errorFile -NoTypeInformation -Delimiter "`t"
 
     Write-Host "Data has been successfully parsed and saved to $outputFile, $excludedFile, and $errorFile"
 }
 
 # 関数の使用例
-# Parse-LSOutput -inputFile "C:\path\to\ls_output.txt" -outputFile "C:\path\to\parsed_ls_output.tsv" -excludedFile "C:\path\to\excluded_output.tsv" -errorFile "C:\path\to\error_output.tsv"
+Parse-LSOutput -inputFile "C:\path\to\ls_output.txt" -outputFile "C:\path\to\parsed_ls_output.tsv" -excludedFile "C:\path\to\excluded_output.tsv" -errorFile "C:\path\to\error_output.tsv"
