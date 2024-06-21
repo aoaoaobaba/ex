@@ -63,7 +63,7 @@ function Parse-FileList {
     )
 
     # 正規表現パターン（シンボリックリンク対応）
-    $pattern = '\s*\d+\s+\d+\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(.+?)(?:\s*->\s*(.+))?$'
+	$pattern = '\s*\d+\s+\d+\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\d+)\s+(\S+\s+\d+\s+\S+)\s+(.+?)(?:\s*->\s*(.+))?$'
 
     # CSVファイルにデータを書き込むための配列
     $csvData = @()
@@ -79,11 +79,9 @@ function Parse-FileList {
             $owner = $matches[3]
             $group_name = $matches[4]
             $size = $matches[5]
-            $month = $matches[6]
-            $day = $matches[7]
-            $time_or_year = $matches[8]
-            $name = $matches[9]
-            $target = if ($matches[10]) { $matches[10] } else { "" }
+            $date = $matches[6]
+            $name = $matches[7]
+            $target = if ($matches[8]) { $matches[8] } else { "" }
 
             # ファイルタイプの判別
             $type = switch ($permissions[0]) {
@@ -123,9 +121,7 @@ function Parse-FileList {
                     Owner = $owner
                     Group_Name = $group_name
                     Size = $size
-                    Month = $month
-                    Day = $day
-                    Time_Or_Year = $time_or_year
+                    Date = $date
                     Directory = $directory
                     FileName = $fileName
                     Target = $target
@@ -141,9 +137,7 @@ function Parse-FileList {
                     Owner = $owner
                     Group_Name = $group_name
                     Size = $size
-                    Month = $month
-                    Day = $day
-                    Time_Or_Year = $time_or_year
+                    Date = $date
                     Directory = $directory
                     FileName = $fileName
                     Target = $target
