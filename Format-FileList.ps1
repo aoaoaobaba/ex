@@ -172,7 +172,9 @@ function Format-LSOutput {
         }
     }
     catch {
-        <#Do this if a terminating exception happens#>
+        # エラーが発生した場合の処理
+        Write-Host "An error occurred:" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
     }
     finally {
         $reader.Close()
