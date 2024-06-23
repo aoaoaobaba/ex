@@ -26,7 +26,8 @@ function ConvertTo-AbsolutePath {
             if ($pathParts.Count -gt 0) {
                 $pathParts = $pathParts[0..($pathParts.Count - 2)]
             }
-        } elseif ($part -ne '.' -and $part -ne '') {
+        }
+        elseif ($part -ne '.' -and $part -ne '') {
             # '.' や空でない部分をパスに追加
             $pathParts += $part
         }
@@ -49,23 +50,16 @@ function IsExcluded {
 
     if ($name -match $datePattern) {
         return "name: $($matches[0])"
-    } elseif ($target -match $datePattern) {
+    }
+    elseif ($target -match $datePattern) {
         return "target: $($matches[0])"
-    } else {
+    }
+    else {
         return $null
     }
 }
 
-function Write-OutputData {
-    param (
-        [PSCustomObject]$data,
-        [string]$filePath
-    )
-
-    $data | Export-Csv -Path $filePath -NoTypeInformation -Delimiter "`t" -Append
-}
-
-function Parse-LSOutput {
+function Format-LSOutput {
     param (
         [string]$inputFile,
         [string]$outputFile,
@@ -120,7 +114,8 @@ function Parse-LSOutput {
                 if ($type -eq 'Directory') {
                     $directory = $name
                     $fileName = ""
-                } else {
+                }
+                else {
                     $directory = Split-Path -Path $name -Parent
                     $fileName = Split-Path -Path $name -Leaf
                 }
@@ -134,41 +129,52 @@ function Parse-LSOutput {
 
                 # 出力データ作成
                 $dataObject = [PSCustomObject]@{
-                    Type = $type
-                    Permissions = $permissions
-                    Links = $links
-                    Owner = $owner
-                    Group_Name = $group_name
-                    Size = $size
-                    Date = $date
-                    Directory = $directory
-                    FileName = $fileName
-                    Target = $target
-                    Line_Number = $i + 1
+                    Type          = $type
+                    Permissions   = $permissions
+                    Links         = $links
+                    Owner         = $owner
+                    Group_Name    = $group_name
+                    Size          = $size
+                    Date          = $date
+                    Directory     = $directory
+                    FileName      = $fileName
+                    Target        = $target
+                    Line_Number   = $i + 1
                     Original_Line = $line
                 }
 
-                # 出力データを $outputFile に出力
-                $outputWriter.WriteLine($dataObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1)
+                # CSV形式に変換して出力
+                $dataObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1 | ForEach-Object {
+                    $outputWriter.WriteLine($_)
+                }
 
                 # 除外データを $excludedFile に出力
                 $excludeReason = IsExcluded -name $name -target $target
                 if ($excludeReason) {
-	                # 除外理由を追加
+                    # 除外理由を追加
                     $dataObject | Add-Member -MemberType NoteProperty -Name ExcludeReason -Value $excludeReason
-                    $excludedWriter.WriteLine($dataObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1)
+                    # CSV形式に変換して出力
+                    $dataObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1 | ForEach-Object {
+                        $excludedWriter.WriteLine($_)
+                    }
                 }
-
-            } else {
+            }
+            else {
                 $errorObject = [PSCustomObject]@{
-                    Line_Number = $i + 1
+                    Line_Number   = $i + 1
                     Original_Line = $line
                 }
-                $errorWriter.WriteLine($errorObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1)
+                $errorObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1 | ForEach-Object {
+                    $errorWriter.WriteLine($_)
+                }
             }
             $i++
         }
-    } finally {
+    }
+    catch {
+        <#Do this if a terminating exception happens#>
+    }
+    finally {
         $reader.Close()
         $outputWriter.Close()
         $excludedWriter.Close()
@@ -179,4 +185,8 @@ function Parse-LSOutput {
 }
 
 # 関数の使用例
-Parse-LSOutput -inputFile "C:\path\to\ls_output.txt" -outputFile "C:\path\to\parsed_ls_output.tsv" -excludedFile "C:\path\to\excluded_output.tsv" -errorFile "C:\path\to\error_output.tsv"
+# Parse-LSOutput `
+#     -inputFile "C:\path\to\ls_output.txt" `
+#     -outputFile "C:\path\to\parsed_ls_output.tsv" `
+#     -excludedFile "C:\path\to\excluded_output.tsv" `
+#     -errorFile "C:\path\to\error_output.tsv"
