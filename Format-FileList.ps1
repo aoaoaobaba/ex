@@ -102,9 +102,9 @@ function Format-LSOutput {
                 $type = switch ($permissions[0]) {
                     '-' { 'File' }
                     'd' { 'Directory' }
-                    'l' { 'Symbolic Link' }
-                    'c' { 'Character Device' }
-                    'b' { 'Block Device' }
+                    'l' { 'SymbolicLink' }
+                    'c' { 'CharacterDevice' }
+                    'b' { 'BlockDevice' }
                     'p' { 'FIFO' }
                     's' { 'Socket' }
                     default { 'Unknown' }
@@ -116,8 +116,8 @@ function Format-LSOutput {
                     $fileName = ""
                 }
                 else {
-                    $directory = Split-Path -Path $name -Parent
-                    $fileName = Split-Path -Path $name -Leaf
+                    $directory = $name -replace '/[^/]*$', ''
+                    $fileName = $name -replace '^.*/', ''
                 }
 
                 # シンボリックリンクのターゲットが相対パスの場合、絶対パスに変換
@@ -144,7 +144,7 @@ function Format-LSOutput {
                 }
 
                 # CSV形式に変換して出力
-                $dataObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1 | ForEach-Object {
+                $dataObject | ConvertTo-Csv -Delimiter "`t" -NoTypeInformation | Select-Object -Skip 1 | ForEach-Object {
                     $outputWriter.WriteLine($_)
                 }
 
@@ -154,7 +154,7 @@ function Format-LSOutput {
                     # 除外理由を追加
                     $dataObject | Add-Member -MemberType NoteProperty -Name ExcludeReason -Value $excludeReason
                     # CSV形式に変換して出力
-                    $dataObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1 | ForEach-Object {
+                    $dataObject | ConvertTo-Csv -Delimiter "`t" -NoTypeInformation | Select-Object -Skip 1 | ForEach-Object {
                         $excludedWriter.WriteLine($_)
                     }
                 }
@@ -164,7 +164,7 @@ function Format-LSOutput {
                     Line_Number   = $i + 1
                     Original_Line = $line
                 }
-                $errorObject | ConvertTo-Csv -NoTypeInformation -Delimiter "`t" -UseCulture | Select-Object -Skip 1 | ForEach-Object {
+                $errorObject | ConvertTo-Csv -Delimiter "`t" -NoTypeInformation | Select-Object -Skip 1 | ForEach-Object {
                     $errorWriter.WriteLine($_)
                 }
             }
@@ -175,6 +175,13 @@ function Format-LSOutput {
         # エラーが発生した場合の処理
         Write-Host "An error occurred:" -ForegroundColor Red
         Write-Host $_.Exception.Message -ForegroundColor Red
+        $errorObject = [PSCustomObject]@{
+            Line_Number   = $i + 1
+            Original_Line = $line
+        }
+        $errorObject | ConvertTo-Csv -Delimiter "`t" -NoTypeInformation | Select-Object -Skip 1 | ForEach-Object {
+            $errorWriter.WriteLine($_)
+        }
     }
     finally {
         $reader.Close()
