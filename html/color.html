@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>プライマリからカラー展開</title>
+  <style>
+    :root {
+      --primary: rgb(2, 70, 172); /* プライマリカラーを指定 */
+
+      /* color-mixによる明度調整で自動生成 */
+      --color-primary: var(--primary); 
+      --color-secondary: color-mix(in srgb, var(--primary), white 30%); /* 30%↑ 白混合で明るめ（補助色） */
+      --color-tertiary:  color-mix(in srgb, var(--primary), black 20%); /* 20%↓ 黒混合で暗め（強調色） */
+      --color-surface:   color-mix(in srgb, var(--primary), white 95%); /* 非常に明るい色（背景） */
+      --color-border:    color-mix(in srgb, var(--primary), gray 85%);  /* グレー寄り（枠線、補助色） */
+    }
+
+    body {
+      font-family: sans-serif;
+      background-color: var(--color-surface);
+      margin: 0;
+      padding: 2rem;
+    }
+
+    h1 {
+      color: var(--color-primary);
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 1.5rem;
+      max-width: 600px;
+      margin-bottom: 2rem;
+    }
+
+    .button {
+      background-color: var(--color-primary);
+      color: white;
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .button:hover {
+      background-color: var(--color-secondary);
+    }
+
+    .button:active {
+      background-color: var(--color-tertiary);
+    }
+
+    .sample-block {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 2rem;
+    }
+
+    .swatch {
+      flex: 0 0 150px;
+      padding: 1rem;
+      border-radius: 4px;
+      color: white;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .swatch.border {
+      background-color: white;
+      color: black;
+      border: 2px solid var(--color-border);
+    }
+  </style>
+</head>
+<body>
+  <h1>プライマリからカラー展開</h1>
+
+  <div class="card">
+    <h2>ボタンの表示例</h2>
+    <button class="button">サンプルボタン</button>
+  </div>
+
+  <div class="card">
+    <h2>各色の見本</h2>
+    <div class="sample-block">
+      <div class="swatch" style="background: var(--color-primary);">Primary</div>
+      <div class="swatch" style="background: var(--color-secondary);">Secondary</div>
+      <div class="swatch" style="background: var(--color-tertiary);">Tertiary</div>
+      <div class="swatch" style="background: var(--color-surface); color: black;">Surface</div>
+      <div class="swatch border">Border</div>
+    </div>
+  </div>
+</body>
+</html>
